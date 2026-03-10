@@ -28,10 +28,10 @@ PROFILE CONTEXT:
 ${profileContext}
 `;
 
-    console.log(`[Chat API] Initializing Gemini request using model: ${process.env.GOOGLE_MODEL || 'gemini-1.5-flash'}`);
+    console.log(`[Chat API] Initializing Gemini request using model: ${process.env.GOOGLE_MODEL || 'gemini-2.5-flash'}`);
     
     const result = streamText({
-      model: google(process.env.GOOGLE_MODEL || 'gemini-1.5-flash'),
+      model: google(process.env.GOOGLE_MODEL || 'gemini-2.5-flash'),
       system: systemPrompt,
       messages,
     });
