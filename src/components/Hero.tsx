@@ -21,7 +21,7 @@ export default function Hero() {
           >
             <div className="inline-flex items-center space-x-2 glass-cyan px-4 py-2 rounded-full border border-brand-cyan/30">
               <Terminal size={16} className="text-brand-cyan" />
-              <span className="text-sm font-mono text-brand-cyan">Executive Tech Lead & Architect</span>
+              <span className="text-sm font-mono text-brand-cyan">Executive Tech Manager & Architect</span>
             </div>
             
             <h1 className="font-display text-5xl md:text-7xl font-bold leading-tight tracking-tight">
@@ -32,7 +32,7 @@ export default function Hero() {
             </h1>
             
             <p className="text-lg md:text-xl text-brand-gray max-w-2xl font-light leading-relaxed">
-              I'm José Renato Oliveira, a Development Executive with 17+ years of experience transforming business requirements into scalable, innovative technology solutions.
+              I'm José Renato Oliveira, a Tech Manager with 17+ years of experience transforming business requirements into scalable, robust architectures and innovative technology solutions.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 pt-4">

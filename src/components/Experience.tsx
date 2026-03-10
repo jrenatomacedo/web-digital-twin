@@ -6,18 +6,18 @@ import { Briefcase, Calendar } from "lucide-react";
 export default function Experience() {
   const experiences = [
     {
-      role: "Executive Development Manager",
+      role: "Tech Manager",
       company: "Marketdata",
       period: "Apr 2022 - Present",
-      description: "Managing the development project portfolio, aligning data solutions with business goals. Leading a team of 25+ collaborators. Key projects include digitizing architect relationship programs and automating CRM processes in the financial segment.",
-      tech: ["Leadership", "Data Strategy", "CRM", "UX/UI Revisions"]
+      description: "Managing the development project portfolio, focusing on the design of robust solutions and complex architectures. Leading a team of 25+ collaborators to align technology with business goals. Key projects include digitizing architect relationship programs and automating CRM processes.",
+      tech: ["Solution Design", "Architecture", "Leadership", "Data Strategy", "CRM"]
     },
     {
-      role: "Development Coordinator",
+      role: "Tech Lead",
       company: "Marketdata",
       period: "May 2011 - Mar 2022",
-      description: "Coordinated full lifecycle of structural CRM / Loyalty projects. Developed campaign engines and self-service interfaces that empowered high autonomy for business users across various tier-1 clients.",
-      tech: ["Project Coordination", "Loyalty Systems", "DevOps", "Integration"]
+      description: "Led the full lifecycle of structural CRM / Loyalty projects. Developed campaign engines and self-service interfaces, defining robust architectures that empowered high autonomy for business users across various tier-1 clients.",
+      tech: ["Technical Leadership", "System Architecture", "Loyalty Systems", "Integration"]
     },
     {
       role: "Senior Java Fullstack Developer",
