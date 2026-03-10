@@ -1,12 +1,11 @@
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { streamText } from 'ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
 
-// Configure Google Generative AI
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY,
-});
+// Configure Google Generative AI natively
+const genAI = new GoogleGenerativeAI(
+  process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY || ''
+);
 
 export async function POST(req: Request) {
   try {
@@ -28,22 +27,61 @@ PROFILE CONTEXT:
 ${profileContext}
 `;
 
-    console.log(`[Chat API] Initializing Gemini request using model: ${process.env.GOOGLE_MODEL || 'gemini-2.5-flash'}`);
+    const modelName = process.env.GOOGLE_MODEL || 'gemini-2.5-flash';
+    console.log(`[Chat API] Initializing Gemini request using native SDK, model: ${modelName}`);
     
-    const result = streamText({
-      model: google(process.env.GOOGLE_MODEL || 'gemini-2.5-flash'),
-      system: systemPrompt,
-      messages,
+    // Initialize the model
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: systemPrompt,
+    });
+
+    // Convert messages to Gemini format (roles: 'user' and 'model')
+    const geminiHistory = messages.slice(0, -1).map((m: any) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+    
+    const lastMessage = messages[messages.length - 1].content;
+
+    const chatSession = model.startChat({
+        history: geminiHistory
+    });
+
+    const result = await chatSession.sendMessageStream(lastMessage);
+    
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        let fullResponse = '';
+        try {
+            for await (const chunk of result.stream) {
+                const chunkText = chunk.text();
+                fullResponse += chunkText;
+                // Vercel AI SDK on the frontend expects data prefixed with "0:" and a JSON encoded string, followed by a newline.
+                controller.enqueue(encoder.encode(`0:${JSON.stringify(chunkText)}\n`));
+            }
+            console.log(`\n\n[Chat API] Completed successfully. Full Gemini Response:\n---------------------------------------------------------------\n${fullResponse}\n---------------------------------------------------------------\n\n`);
+            controller.close();
+        } catch(e) {
+            console.error('[Chat API] Gemini Stream Error:', e);
+            controller.error(e);
+        }
+      }
     });
 
     console.log('[Chat API] Returning Gemini stream to client.');
-    return result.toTextStreamResponse();
+    return new Response(stream, {
+        headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Transfer-Encoding': 'chunked',
+            'Connection': 'keep-alive',
+        }
+    });
 
   } catch (error) {
     console.error('[Chat API] Gemini API Error:', error);
-    // If the error occurs before stream is active, return a simple 500.
-    // However, if we're trying to communicate back to the client cleanly,
-    // we can return a friendly error message as standard text or a simulated stream chunk.
+    // If the error occurs before stream is active, return a friendly error message as a simulated stream chunk.
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
@@ -54,7 +92,7 @@ ${profileContext}
     });
 
     return new Response(stream, {
-      status: 200, // Returning 200 so the frontend chat displays the error message seamlessly
+      status: 200, 
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Transfer-Encoding': 'chunked',
