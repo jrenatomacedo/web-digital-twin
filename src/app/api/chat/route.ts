@@ -1,8 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateId, createUIMessageStream, createUIMessageStreamResponse } from 'ai';
 import fs from 'fs';
 import path from 'path';
 
-// Configure Google Generative AI natively
 const genAI = new GoogleGenerativeAI(
   process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY || ''
 );
@@ -11,7 +11,6 @@ export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
 
-    // Read the user profile context dynamically
     let profileContext = '';
     const profilePath = path.join(process.cwd(), 'profile.txt');
     if (fs.existsSync(profilePath)) {
@@ -29,76 +28,55 @@ ${profileContext}
 `;
 
     const modelName = process.env.GOOGLE_MODEL || 'gemini-2.5-flash';
-    console.log(`[Chat API] Initializing Gemini request using native SDK, model: ${modelName}`);
-    
-    // Initialize the model
+
     const model = genAI.getGenerativeModel({
       model: modelName,
       systemInstruction: systemPrompt,
     });
 
-    // Convert messages to Gemini format (roles: 'user' and 'model')
-    const geminiHistory = messages.slice(0, -1).map((m: any) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
-    
+    // Hardened history filtering to avoid malformed parts (400 Bad Request)
+    const geminiHistory = messages.slice(0, -1)
+      .filter((m: any) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim() !== '')
+      .map((m: any) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      }));
+
     const lastMessage = messages[messages.length - 1].content;
+    if (!lastMessage || typeof lastMessage !== 'string' || lastMessage.trim() === '') {
+      throw new Error('Last message content is empty');
+    }
 
     const chatSession = model.startChat({
-        history: geminiHistory
+      history: geminiHistory
     });
 
     const result = await chatSession.sendMessageStream(lastMessage);
-    
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        let fullResponse = '';
-        try {
-            for await (const chunk of result.stream) {
-                const chunkText = chunk.text();
-                fullResponse += chunkText;
-                // Vercel AI SDK on the frontend expects data prefixed with "0:" and a JSON encoded string, followed by a newline.
-                controller.enqueue(encoder.encode(`0:${JSON.stringify(chunkText)}\n`));
+
+    const responseId = generateId();
+    const stream = createUIMessageStream({
+        async execute({ writer }) {
+          // Required: Send text-start before any text-delta
+          writer.write({ type: 'text-start', id: responseId });
+          
+          for await (const chunk of result.stream) {
+            const chunkText = chunk.text();
+            if (chunkText) {
+              writer.write({ type: 'text-delta', id: responseId, delta: chunkText });
             }
-            console.log(`\n\n[Chat API] Completed successfully. Full Gemini Response:\n---------------------------------------------------------------\n${fullResponse}\n---------------------------------------------------------------\n\n`);
-            controller.close();
-        } catch(e) {
-            console.error('[Chat API] Gemini Stream Error:', e);
-            controller.error(e);
-        }
-      }
-    });
-
-    console.log('[Chat API] Returning Gemini stream to client.');
-    return new Response(stream, {
-        headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
-            'Transfer-Encoding': 'chunked',
-            'Connection': 'keep-alive',
+          }
+          // Optional but recommended: Send text-end
+          writer.write({ type: 'text-end', id: responseId });
         }
     });
 
-  } catch (error) {
+    return createUIMessageStreamResponse({ stream });
+
+  } catch (error: any) {
     console.error('[Chat API] Gemini API Error:', error);
-    // If the error occurs before stream is active, return a friendly error message as a simulated stream chunk.
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      start(controller) {
-        const errorMessage = "I'm currently experiencing technical difficulties connecting to my AI providers. Please try again later or reach out via LinkedIn.";
-        controller.enqueue(encoder.encode(`0:${JSON.stringify(errorMessage)}\n`));
-        controller.close();
-      }
-    });
-
-    return new Response(stream, {
-      status: 200, 
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
-        'Connection': 'keep-alive',
-      }
+    return new Response(JSON.stringify({ error: error.message || 'Internal Server Error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
     });
   }
 }

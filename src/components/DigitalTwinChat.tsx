@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 export default function DigitalTwinChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [inputLocal, setInputLocal] = useState("");
-  const { messages, sendMessage, status } = useChat();
+  const { messages, sendMessage, status, error } = useChat() as any;
   const isLoading = status === 'submitted' || status === 'streaming';
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -16,12 +16,11 @@ export default function DigitalTwinChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const onHandleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputLocal.trim() || isLoading) return;
+    if (!inputLocal?.trim() || isLoading) return;
     
-    // Fallback TS ignore for ui SDK mismatch 
-    // @ts-ignore
+    // In this version of useChat, sendMessage is used instead of handleSubmit
     sendMessage({ role: "user", content: inputLocal });
     setInputLocal("");
   };
@@ -105,7 +104,7 @@ export default function DigitalTwinChat() {
                         : "glass text-brand-gray rounded-tl-sm border border-brand-cyan/10"
                     }`}
                   >
-                    {m.content}
+                    {m.content || m.parts?.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('')}
                   </div>
                 </div>
               ))}
@@ -127,7 +126,7 @@ export default function DigitalTwinChat() {
 
             {/* Input Form */}
             <div className="p-4 border-t border-white/5 bg-background/50">
-              <form onSubmit={handleSubmit} className="flex gap-2">
+              <form onSubmit={onHandleSubmit} className="flex gap-2">
                 <input
                   type="text"
                   value={inputLocal}
@@ -137,7 +136,7 @@ export default function DigitalTwinChat() {
                 />
                 <button
                   type="submit"
-                  disabled={!inputLocal.trim() || isLoading}
+                  disabled={!inputLocal?.trim() || isLoading}
                   className="bg-brand-cyan hover:bg-white text-background p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                   aria-label="Send message"
                 >
