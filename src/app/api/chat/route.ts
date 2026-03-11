@@ -17,13 +17,17 @@ export async function POST(req: Request) {
       profileContext = fs.readFileSync(profilePath, 'utf8');
     }
 
-    const systemPrompt = `You are the "Digital Twin" of José Renato Oliveira, a highly experienced Tech Manager, with primary background as a Tech Lead. You have an extensive track record in software development, creating solution designs, and defining robust system architectures.
-Your goal is to answer questions about your career, experience, and skills based on the context provided. Emphasize your ability to architect scalable and robust solutions for complex business problems.
-Be professional, eloquent, and slightly edgy, reflecting an "enterprise meets edgy" aesthetic.
-IMPORTANT: Keep your responses objective, concise, and under 600 characters.
-Use the following profile context to answer questions accurately. If you do not know the answer based on the context, politely state that you can't share that specific detail but pivot to a related professional achievement.
+    const systemPrompt = `Você é o "Digital Twin" do José Renato Oliveira, Tech Manager e Tech Lead.
+Responda de forma profissional e concisa às perguntas sobre sua carreira usando o contexto abaixo.
 
-PROFILE CONTEXT:
+REGRAS CRÍTICAS:
+1. Responda APENAS à pergunta mais recente do usuário.
+2. NÃO repita informações de turnos anteriores (como nome ou moradia) a menos que seja perguntado novamente.
+3. NÃO faça introduções repetitivas em cada resposta.
+4. Se a pergunta for sobre algo que não está no contexto, seja educado e diga que não pode compartilhar esse detalhe.
+5. Máximo de 500 caracteres.
+
+CONTEXTO DO PERFIL:
 ${profileContext}
 `;
 
@@ -34,24 +38,38 @@ ${profileContext}
       systemInstruction: systemPrompt,
     });
 
-    // Hardened history filtering to avoid malformed parts (400 Bad Request)
+    // Strictly map history to Gemini format, handling both content and parts (UI SDK v3/v4 format)
     const geminiHistory = messages.slice(0, -1)
-      .filter((m: any) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim() !== '')
-      .map((m: any) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }],
-      }));
+      .filter((m: any) => m.role === 'user' || m.role === 'assistant')
+      .map((m: any) => {
+        let text = '';
+        if (typeof m.content === 'string' && m.content) {
+          text = m.content;
+        } else if (Array.isArray(m.parts)) {
+          text = m.parts
+            .filter((p: any) => p.type === 'text')
+            .map((p: any) => p.text)
+            .join('');
+        }
+
+        return {
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: text || '' }],
+        };
+      })
+      .filter((m: any) => m.parts[0].text.trim() !== '');
 
     const lastMessage = messages[messages.length - 1].content;
-    if (!lastMessage || typeof lastMessage !== 'string' || lastMessage.trim() === '') {
+    if (!lastMessage) {
       throw new Error('Last message content is empty');
     }
 
-    const chatSession = model.startChat({
-      history: geminiHistory
+    const result = await model.generateContentStream({
+      contents: [
+        ...geminiHistory,
+        { role: 'user', parts: [{ text: lastMessage }] }
+      ]
     });
-
-    const result = await chatSession.sendMessageStream(lastMessage);
 
     const responseId = generateId();
     const stream = createUIMessageStream({
